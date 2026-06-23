@@ -41,6 +41,26 @@ async function encryptChallenge(keyHex, challengeBytes) {
   return new Uint8Array(ciphertextBuffer.slice(0, 16));
 }
 
+// Helper to write values robustly, checking properties or falling back on failure
+async function writeCharacteristicValue(characteristic, value) {
+  try {
+    if (characteristic.properties.writeWithoutResponse) {
+      await characteristic.writeValueWithoutResponse(value);
+    } else if (characteristic.properties.write) {
+      await characteristic.writeValueWithResponse(value);
+    } else {
+      await characteristic.writeValue(value);
+    }
+  } catch (err) {
+    console.warn("Primary write failed, trying fallback write:", err);
+    try {
+      await characteristic.writeValue(value);
+    } catch (fallbackErr) {
+      throw new Error(err.message || err);
+    }
+  }
+}
+
 export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
   const [device, setDevice] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -245,7 +265,7 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
         setAuthStatus("Requesting security token challenge...");
         // Send request challenge command: [0x01, 0x08]
         const reqChallenge = new Uint8Array([0x01, 0x08]);
-        await authChar.writeValueWithResponse(reqChallenge);
+        await writeCharacteristicValue(authChar, reqChallenge);
         
         // Handshake will continue inside handleAuthNotification
       } else {
@@ -302,7 +322,7 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
           response.set(encrypted, 2);
 
           if (authCharRef.current) {
-            await authCharRef.current.writeValueWithResponse(response);
+            await writeCharacteristicValue(authCharRef.current, response);
           }
         } else {
           throw new Error("Band rejected challenge request.");

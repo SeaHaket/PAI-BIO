@@ -1,0 +1,17 @@
+{
+  "short_name": "PAI Telemetry",
+  "name": "PAI Fitness Age Telemetry Dashboard",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#080c14",
+  "theme_color": "#080c14",
+  "display": "standalone",
+  "orientation": "portrait"
+}

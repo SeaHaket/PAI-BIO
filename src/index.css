@@ -1,0 +1,314 @@
+/* ─── Global Reset & Design Tokens ────────────────────────────────────────── */
+:root {
+  --bg-deep: #060913;
+  --bg-surface: rgba(13, 20, 35, 0.65);
+  --bg-surface-solid: #0d1423;
+  --bg-card: rgba(18, 28, 48, 0.5);
+  --border-light: rgba(0, 243, 255, 0.15);
+  --border-glow: rgba(0, 243, 255, 0.3);
+  
+  /* Neon Brand Colors */
+  --neon-volt: #dfff00;       /* Volt Yellow/Green */
+  --neon-cyan: #00f3ff;       /* Cyber Cyan */
+  --neon-alert: #ff2a5f;      /* Crimson Alert */
+  --neon-orange: #ff9d00;     /* Warning Orange */
+  --text-primary: #f1f5f9;
+  --text-muted: #64748b;
+  --text-dark: #030712;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--bg-deep);
+  background-image: 
+    linear-gradient(rgba(0, 243, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 243, 255, 0.02) 1px, transparent 1px);
+  background-size: 30px 30px;
+  background-position: center;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  color: var(--text-primary);
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  overflow-x: hidden;
+}
+
+html {
+  height: -webkit-fill-available;
+}
+
+/* ─── Futuristic HUD Scanlines ───────────────────────────────────────────── */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.25) 50%
+  );
+  background-size: 100% 4px;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+/* Pulsing radar dot */
+@keyframes pulse {
+  0% { transform: scale(0.95); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 8px var(--neon-cyan)); }
+  100% { transform: scale(0.95); opacity: 0.5; }
+}
+
+.radar-pulse {
+  width: 8px;
+  height: 8px;
+  background-color: var(--neon-cyan);
+  border-radius: 50%;
+  animation: pulse 2s infinite ease-in-out;
+}
+
+/* ─── Typography Utility ─────────────────────────────────────────────────── */
+.tech-font {
+  font-family: 'Orbitron', 'Rajdhani', sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.tech-caps {
+  font-family: 'Rajdhani', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 700;
+}
+
+/* ─── Interactive Telemetry Grid & Layout ────────────────────────────────── */
+.app-container {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at top, rgba(0, 243, 255, 0.08) 0%, transparent 60%);
+  border-left: 1px solid rgba(0, 243, 255, 0.05);
+  border-right: 1px solid rgba(0, 243, 255, 0.05);
+  padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 24px);
+  position: relative;
+}
+
+/* Cybernetic Glassmorphic Panel */
+.cyber-panel {
+  background: var(--bg-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cyber-panel:hover {
+  border-color: var(--border-glow);
+  box-shadow: 0 12px 40px 0 rgba(0, 243, 255, 0.08);
+}
+
+/* Corner highlights for futuristic feel */
+.cyber-panel::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid var(--neon-cyan);
+  border-right: 2px solid var(--neon-cyan);
+  pointer-events: none;
+}
+
+.cyber-panel::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-bottom: 2px solid var(--neon-volt);
+  border-left: 2px solid var(--neon-volt);
+  pointer-events: none;
+}
+
+/* ─── UI Controls (Futuristic Sliders & Inputs) ───────────────────────────── */
+.cyber-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cyber-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cyber-input {
+  background: rgba(8, 14, 27, 0.8);
+  border: 1px solid rgba(0, 243, 255, 0.15);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.cyber-input:focus {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.25);
+}
+
+/* Styled HTML Sliders */
+.cyber-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: rgba(0, 243, 255, 0.1);
+  border-radius: 3px;
+  outline: none;
+  margin: 12px 0;
+}
+
+.cyber-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--neon-volt);
+  border: 3px solid var(--bg-deep);
+  cursor: pointer;
+  box-shadow: 0 0 12px var(--neon-volt);
+  transition: transform 0.1s;
+}
+
+.cyber-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.cyber-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--neon-volt);
+  border: 3px solid var(--bg-deep);
+  cursor: pointer;
+  box-shadow: 0 0 12px var(--neon-volt);
+  transition: transform 0.1s;
+}
+
+.cyber-slider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+.btn-cyber-primary {
+  width: 100%;
+  background: linear-gradient(135deg, var(--neon-cyan), #009cb3);
+  color: var(--text-dark);
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 20px rgba(0, 243, 255, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-cyber-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0, 243, 255, 0.35);
+  filter: brightness(1.1);
+}
+
+.btn-cyber-primary:active {
+  transform: translateY(0);
+}
+
+.btn-cyber-secondary {
+  background: transparent;
+  border: 1px solid var(--border-glow);
+  color: var(--neon-cyan);
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cyber-secondary:hover {
+  background: rgba(0, 243, 255, 0.05);
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.15);
+}
+
+/* ─── Tab Bar ────────────────────────────────────────────────────────────── */
+.cyber-tabs {
+  display: flex;
+  background: rgba(8, 14, 27, 0.7);
+  border-radius: 12px;
+  padding: 4px;
+  border: 1px solid rgba(0, 243, 255, 0.08);
+}
+
+.cyber-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.cyber-tab.active {
+  background: var(--neon-cyan);
+  color: var(--text-dark);
+  box-shadow: 0 4px 15px rgba(0, 243, 255, 0.25);
+  font-weight: 700;
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slideup {
+  animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes gridGlow {
+  0% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+  100% { opacity: 0.3; }
+}
+
+.grid-glow {
+  animation: gridGlow 4s infinite ease-in-out;
+}

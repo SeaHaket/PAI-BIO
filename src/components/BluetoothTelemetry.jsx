@@ -270,8 +270,8 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
         authChar.addEventListener("characteristicvaluechanged", handleAuthNotification);
 
         setAuthStatus("Requesting security token challenge...");
-        // Send request challenge command: [0x02, 0x00]
-        const reqChallenge = new Uint8Array([0x02, 0x00]);
+        // Send request challenge command: [0x02, 0x08]
+        const reqChallenge = new Uint8Array([0x02, 0x08]);
         await writeCharacteristicValue(authChar, reqChallenge);
         
         // Handshake will continue inside handleAuthNotification
@@ -324,10 +324,10 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
           const encrypted = await encryptChallenge(authKey, challenge, authAttemptRef.current === 2);
           
           setAuthStatus("Sending encrypted response handshake...");
-          // Send response command: [0x03, 0x00, ...16 encrypted bytes]
+          // Send response command: [0x03, 0x08, ...16 encrypted bytes]
           const response = new Uint8Array(18);
           response[0] = 0x03;
-          response[1] = 0x00;
+          response[1] = 0x08;
           response.set(encrypted, 2);
 
           if (authCharRef.current) {
@@ -360,7 +360,7 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
             setAuthStatus("Signature rejected. Requesting new challenge for reversed key check...");
             
             // Re-request challenge
-            const reqChallenge = new Uint8Array([0x02, 0x00]);
+            const reqChallenge = new Uint8Array([0x02, 0x08]);
             if (authCharRef.current) {
               await writeCharacteristicValue(authCharRef.current, reqChallenge);
             }

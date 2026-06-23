@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 // Xiaomi Auth Service and Characteristic UUIDs (Huami/Gadgetbridge Protocol)
 const XIAOMI_AUTH_SERVICE_UUID = "0000fee1-0000-1000-8000-00805f9b34fb";
-const XIAOMI_AUTH_CHAR_UUID = "00000009-0000-1000-8000-00805f9b34fb";
+const XIAOMI_AUTH_CHAR_UUID = "00000009-0000-3512-2118-0009af100700";
 const HEART_RATE_SERVICE_UUID = "heart_rate";
 const HEART_RATE_CHAR_UUID = "heart_rate_measurement";
 

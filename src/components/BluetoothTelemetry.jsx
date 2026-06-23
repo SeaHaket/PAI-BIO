@@ -6,6 +6,14 @@ const XIAOMI_AUTH_CHAR_UUID = "00000009-0000-3512-2118-0009af100700";
 const HEART_RATE_SERVICE_UUID = "heart_rate";
 const HEART_RATE_CHAR_UUID = "heart_rate_measurement";
 
+// Helper function to convert Uint8Array to formatted Hex String
+const toHex = (arr) => {
+  return Array.from(arr)
+    .map(x => x.toString(16).padStart(2, "0").toUpperCase())
+    .join(" ");
+};
+
+// Helper function to encrypt challenge using Web Crypto API (AES-ECB mode via zero-IV AES-CBC)
 async function encryptChallenge(keyHex, challengeBytes, reverseKey = false) {
   const hexMatch = keyHex.trim().replace(/^0x/i, "").match(/([a-f0-9]{32})/i);
   if (!hexMatch) {
@@ -79,6 +87,9 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
   const [authStatus, setAuthStatus] = useState("");
   const [showSettings, setShowSettings] = useState(false);
 
+  // Diagnostics Console State
+  const [debugLogs, setDebugLogs] = useState([]);
+
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
   const ecgPoints = useRef([]);
@@ -99,6 +110,12 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, []);
+
+  // Diagnostics Logger Helper
+  const addLog = (msg) => {
+    const time = new Date().toLocaleTimeString(undefined, { hour12: false });
+    setDebugLogs(prev => [...prev.slice(-14), `[${time}] ${msg}`]);
+  };
 
   // Save changes to local storage
   const saveAuthSettings = (key, value) => {
@@ -228,7 +245,10 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
     setErrorMsg("");
     setAuthStatus("");
     setIsConnecting(true);
+    setDebugLogs([]); // Clear logs for new session
     stopSimulator();
+
+    addLog("Pairing initiated.");
 
     try {
       if (!navigator.bluetooth) {
@@ -240,7 +260,14 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
         throw new Error("Could not find a valid 32-character hexadecimal key in input.");
       }
 
+      if (useAuth && hexMatch) {
+        const cleanKey = hexMatch[1];
+        const keyBytes = new Uint8Array(cleanKey.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        addLog(`Secret Key parsed: ${toHex(keyBytes)}`);
+      }
+
       setAuthStatus("Scanning for wearable telemetry...");
+      addLog("Scanning for BLE devices...");
       const bluetoothDevice = await navigator.bluetooth.requestDevice({
         filters: [
           { services: [HEART_RATE_SERVICE_UUID] },
@@ -251,26 +278,36 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
         optionalServices: [HEART_RATE_SERVICE_UUID, XIAOMI_AUTH_SERVICE_UUID, "device_information"]
       });
 
+      addLog(`Found device: ${bluetoothDevice.name || "Unnamed Band"}`);
       setDevice(bluetoothDevice);
       bluetoothDevice.addEventListener("gattserverdisconnected", onDisconnected);
 
       setAuthStatus("Establishing GATT server connection...");
+      addLog("Connecting to GATT Server...");
       const server = await bluetoothDevice.gatt.connect();
+      addLog("GATT Connected.");
 
       // If user enabled custom authentication (Gadgetbridge Key)
       if (useAuth) {
         authAttemptRef.current = 1; // Reset auth attempt count
         setAuthStatus("Requesting Security Authentication Service...");
+        addLog(`Requesting service FEE1...`);
         const authService = await server.getPrimaryService(XIAOMI_AUTH_SERVICE_UUID);
+        addLog("Service FEE1 acquired.");
+
+        addLog(`Requesting characteristic 0009...`);
         const authChar = await authService.getCharacteristic(XIAOMI_AUTH_CHAR_UUID);
         authCharRef.current = authChar;
+        addLog("Characteristic 0009 acquired.");
 
         setAuthStatus("Subscribing to Auth status ports...");
+        addLog("Subscribing to notification descriptors...");
         await authChar.startNotifications();
         authChar.addEventListener("characteristicvaluechanged", handleAuthNotification);
+        addLog("Notifications active on 0009.");
 
         setAuthStatus("Requesting security token challenge...");
-        // Send request challenge command: [0x02, 0x08]
+        addLog("TX Challenge Request -> 02 08");
         const reqChallenge = new Uint8Array([0x02, 0x08]);
         await writeCharacteristicValue(authChar, reqChallenge);
         
@@ -278,11 +315,15 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
       } else {
         // Standard Heart Rate connection
         setAuthStatus("Subscribing to heart rate telemetry...");
+        addLog("Requesting standard Heart Rate Service...");
         const hrService = await server.getPrimaryService(HEART_RATE_SERVICE_UUID);
+        addLog("Heart Rate Service acquired.");
+        
         const hrChar = await hrService.getCharacteristic(HEART_RATE_CHAR_UUID);
-
+        addLog("Subscribing to standard BPM notification descriptor...");
         await hrChar.startNotifications();
         hrChar.addEventListener("characteristicvaluechanged", handleHeartRateNotification);
+        addLog("Heart rate streaming unlocked.");
 
         setIsConnected(true);
         setIsConnecting(false);
@@ -290,6 +331,7 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
       }
     } catch (err) {
       console.error(err);
+      addLog(`ERROR: ${err.message || err}`);
       setErrorMsg(err.message || "Connection failed. Check Bluetooth settings.");
       setIsConnecting(false);
       setIsConnected(false);
@@ -302,10 +344,13 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
     try {
       const dataView = event.target.value;
       const data = new Uint8Array(dataView.buffer, dataView.byteOffset, dataView.byteLength);
-      console.log("Auth notification received:", Array.from(data).map(x => x.toString(16)));
+      addLog(`RX Auth Notification <- ${toHex(data)}`);
 
       // Check header prefix
-      if (data[0] !== 0x10) return;
+      if (data[0] !== 0x10) {
+        addLog(`Warn: Ignored notification with header ${data[0].toString(16)}`);
+        return;
+      }
 
       const responseToCmd = data[1];
       const status = data[2];
@@ -319,9 +364,11 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
           
           // Extrapolate the 16-byte random challenge (index 3 to 18)
           const challenge = data.slice(3, 19);
+          addLog(`Challenge (len: ${challenge.length}): ${toHex(challenge)}`);
           
           // Encrypt challenge with key (passing whether to reverse the key byte order)
           const encrypted = await encryptChallenge(authKey, challenge, authAttemptRef.current === 2);
+          addLog(`AES Ciphertext Output: ${toHex(encrypted)}`);
           
           setAuthStatus("Sending encrypted response handshake...");
           // Send response command: [0x03, 0x08, ...16 encrypted bytes]
@@ -331,23 +378,29 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
           response.set(encrypted, 2);
 
           if (authCharRef.current) {
+            addLog(`TX Signature Response -> ${toHex(response)}`);
             await writeCharacteristicValue(authCharRef.current, response);
           }
         } else {
+          addLog("ERROR: Band rejected challenge request command.");
           throw new Error("Band rejected challenge request.");
         }
       } else if (responseToCmd === 0x03) {
         // Response to sending encrypted challenge
         if (status === 0x01) {
+          addLog("Auth verified by band! Authentication successful.");
           setAuthStatus("Pairing verified! Accessing biometrics...");
           
           // Authentication succeeded! Now hook up heart rate measurements
           const server = device.gatt;
+          addLog("Requesting standard Heart Rate Service...");
           const hrService = await server.getPrimaryService(HEART_RATE_SERVICE_UUID);
+          
           const hrChar = await hrService.getCharacteristic(HEART_RATE_CHAR_UUID);
-
+          addLog("Subscribing to standard BPM notification descriptor...");
           await hrChar.startNotifications();
           hrChar.addEventListener("characteristicvaluechanged", handleHeartRateNotification);
+          addLog("Heart rate streaming unlocked.");
 
           setIsConnected(true);
           setIsConnecting(false);
@@ -355,6 +408,7 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
         } else {
           // If first attempt failed, try with reversed key order (little-endian fallback)
           if (authAttemptRef.current === 1) {
+            addLog(`WARN: Auth rejected with standard key order. Retrying with reversed key...`);
             console.warn("Auth signature rejected. Re-attempting with reversed key byte order...");
             authAttemptRef.current = 2;
             setAuthStatus("Signature rejected. Requesting new challenge for reversed key check...");
@@ -362,15 +416,18 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
             // Re-request challenge
             const reqChallenge = new Uint8Array([0x02, 0x08]);
             if (authCharRef.current) {
+              addLog("TX Challenge Request (fallback) -> 02 08");
               await writeCharacteristicValue(authCharRef.current, reqChallenge);
             }
           } else {
+            addLog("ERROR: Auth rejected with both standard and reversed key orders.");
             throw new Error("Band rejected auth signature. Check secret key correctness.");
           }
         }
       }
     } catch (err) {
       console.error("Auth process error:", err);
+      addLog(`ERROR: ${err.message || err}`);
       setErrorMsg(err.message || "Auth handshake failed.");
       disconnectDevice();
     }
@@ -391,6 +448,7 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
   };
 
   const onDisconnected = () => {
+    addLog("Device disconnected.");
     setIsConnected(false);
     setLiveBPM(0);
     setDevice(null);
@@ -398,6 +456,7 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
   };
 
   const disconnectDevice = () => {
+    addLog("Disconnecting device...");
     if (device && device.gatt.connected) {
       device.gatt.disconnect();
     }
@@ -473,7 +532,7 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
         </div>
       </div>
 
-      {/* Advanced Settings Dropdown */}
+      {/* Advanced Settings & Diagnostics console */}
       {showSettings && !isConnected && (
         <div 
           className="cyber-panel"
@@ -505,16 +564,46 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
                 type="text" 
                 className="cyber-input"
                 style={{ fontSize: "12px", letterSpacing: "1px", padding: "10px" }}
-                placeholder="e.g. 92a549a1bc40ff18efab5018e6ff051b"
+                placeholder="Paste key or 'MAC;KEY' raw string"
                 value={authKey}
                 onChange={(e) => saveAuthSettings("authKey", e.target.value)}
-                maxLength={32}
               />
               <span style={{ fontSize: "9px", color: "var(--text-muted)", lineHeight: "1.3", marginTop: "2px" }}>
                 💡 Key is required because modern Mi Bands block heart rate requests unless authenticated with a cryptographic handshake. Key is saved locally in browser storage.
               </span>
             </div>
           )}
+
+          {/* Scrolling Diagnostics Console */}
+          <div style={{ marginTop: "8px", borderTop: "1px solid rgba(0, 243, 255, 0.1)", paddingTop: "10px" }}>
+            <span className="tech-caps" style={{ fontSize: "9px", color: "var(--neon-cyan)", display: "block", marginBottom: "6px", fontWeight: "800" }}>
+              📊 TELEMETRY PROTOCOL DIAGNOSTICS
+            </span>
+            <div 
+              style={{ 
+                fontFamily: "'Courier New', Courier, monospace", 
+                fontSize: "10px", 
+                color: "rgba(0, 243, 255, 0.85)", 
+                backgroundColor: "#03060c", 
+                padding: "8px", 
+                borderRadius: "6px", 
+                maxHeight: "150px", 
+                overflowY: "auto",
+                lineHeight: "1.4",
+                border: "1px solid rgba(0, 243, 255, 0.05)",
+                whiteSpace: "pre-wrap",
+                textAlign: "left"
+              }}
+            >
+              {debugLogs.length === 0 ? (
+                <span style={{ color: "var(--text-muted)" }}>[Idle] Waiting for pairing connection...</span>
+              ) : (
+                debugLogs.map((log, idx) => (
+                  <div key={idx} style={{ borderBottom: "1px solid rgba(0, 243, 255, 0.02)", padding: "2px 0" }}>{log}</div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 

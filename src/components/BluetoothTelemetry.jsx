@@ -6,17 +6,21 @@ const XIAOMI_AUTH_CHAR_UUID = "00000009-0000-3512-2118-0009af100700";
 const HEART_RATE_SERVICE_UUID = "heart_rate";
 const HEART_RATE_CHAR_UUID = "heart_rate_measurement";
 
-// Helper function to encrypt challenge using Web Crypto API (AES-ECB mode via zero-IV AES-CBC)
-async function encryptChallenge(keyHex, challengeBytes) {
-  const cleanKey = keyHex.trim().replace(/^0x/i, "");
-  if (cleanKey.length !== 32) {
-    throw new Error("Key length mismatch. Ensure key is exactly 32 hex characters.");
+async function encryptChallenge(keyHex, challengeBytes, reverseKey = false) {
+  const hexMatch = keyHex.trim().replace(/^0x/i, "").match(/([a-f0-9]{32})/i);
+  if (!hexMatch) {
+    throw new Error("Key length mismatch. Ensure key contains a 32-character hex token.");
   }
+  const cleanKey = hexMatch[1];
   
   // Convert 32-character hex key to 16-byte Uint8Array
-  const keyBytes = new Uint8Array(
+  let keyBytes = new Uint8Array(
     cleanKey.match(/.{1,2}/g).map(byte => parseInt(byte, 16))
   );
+  
+  if (reverseKey) {
+    keyBytes.reverse();
+  }
   
   // Import key for AES-CBC
   const cryptoKey = await window.crypto.subtle.importKey(
@@ -80,6 +84,7 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
   const ecgPoints = useRef([]);
   const simInterval = useRef(null);
   const authCharRef = useRef(null);
+  const authAttemptRef = useRef(1);
 
   // Load saved credentials on mount
   useEffect(() => {
@@ -230,8 +235,9 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
         throw new Error("Web Bluetooth is not supported in this browser. Try Chrome or Edge.");
       }
 
-      if (useAuth && authKey.trim().length !== 32) {
-        throw new Error("Auth Key must be exactly 32 hexadecimal characters.");
+      const hexMatch = authKey.trim().replace(/^0x/i, "").match(/([a-f0-9]{32})/i);
+      if (useAuth && !hexMatch) {
+        throw new Error("Could not find a valid 32-character hexadecimal key in input.");
       }
 
       setAuthStatus("Scanning for wearable telemetry...");
@@ -253,6 +259,7 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
 
       // If user enabled custom authentication (Gadgetbridge Key)
       if (useAuth) {
+        authAttemptRef.current = 1; // Reset auth attempt count
         setAuthStatus("Requesting Security Authentication Service...");
         const authService = await server.getPrimaryService(XIAOMI_AUTH_SERVICE_UUID);
         const authChar = await authService.getCharacteristic(XIAOMI_AUTH_CHAR_UUID);
@@ -306,13 +313,15 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
       if (responseToCmd === 0x02) {
         // Response to challenge request (0x02)
         if (status === 0x01) {
-          setAuthStatus("Challenge received. Computing encryption signature...");
+          setAuthStatus(authAttemptRef.current === 1 
+            ? "Challenge received. Computing encryption signature..." 
+            : "New challenge received. Trying reversed key order...");
           
           // Extrapolate the 16-byte random challenge (index 3 to 18)
           const challenge = data.slice(3, 19);
           
-          // Encrypt challenge with key via AES-128 ECB
-          const encrypted = await encryptChallenge(authKey, challenge);
+          // Encrypt challenge with key (passing whether to reverse the key byte order)
+          const encrypted = await encryptChallenge(authKey, challenge, authAttemptRef.current === 2);
           
           setAuthStatus("Sending encrypted response handshake...");
           // Send response command: [0x03, 0x00, ...16 encrypted bytes]
@@ -344,7 +353,20 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
           setIsConnecting(false);
           setAuthStatus("");
         } else {
-          throw new Error("Band rejected auth signature. Check secret key correctness.");
+          // If first attempt failed, try with reversed key order (little-endian fallback)
+          if (authAttemptRef.current === 1) {
+            console.warn("Auth signature rejected. Re-attempting with reversed key byte order...");
+            authAttemptRef.current = 2;
+            setAuthStatus("Signature rejected. Requesting new challenge for reversed key check...");
+            
+            // Re-request challenge
+            const reqChallenge = new Uint8Array([0x02, 0x00]);
+            if (authCharRef.current) {
+              await writeCharacteristicValue(authCharRef.current, reqChallenge);
+            }
+          } else {
+            throw new Error("Band rejected auth signature. Check secret key correctness.");
+          }
         }
       }
     } catch (err) {

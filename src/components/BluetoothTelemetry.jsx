@@ -263,8 +263,8 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
         authChar.addEventListener("characteristicvaluechanged", handleAuthNotification);
 
         setAuthStatus("Requesting security token challenge...");
-        // Send request challenge command: [0x01, 0x08]
-        const reqChallenge = new Uint8Array([0x01, 0x08]);
+        // Send request challenge command: [0x02, 0x08]
+        const reqChallenge = new Uint8Array([0x02, 0x08]);
         await writeCharacteristicValue(authChar, reqChallenge);
         
         // Handshake will continue inside handleAuthNotification
@@ -303,8 +303,8 @@ export default function BluetoothTelemetry({ age, onHeartRateUpdate }) {
       const responseToCmd = data[1];
       const status = data[2];
 
-      if (responseToCmd === 0x01) {
-        // Response to challenge request
+      if (responseToCmd === 0x02) {
+        // Response to challenge request (0x02)
         if (status === 0x01) {
           setAuthStatus("Challenge received. Computing encryption signature...");
           

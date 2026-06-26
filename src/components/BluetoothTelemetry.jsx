@@ -14,7 +14,7 @@ const CHUNKED_READ_CHAR_UUID = "00000017-0000-3512-2118-0009af100700";
 // P-192 (secp192r1) Elliptic Curve Constants
 const P192_P = (2n ** 192n) - (2n ** 64n) - 1n;
 const P192_A = P192_P - 3n;
-const P192_B = 0x64210519e59c80e70fa7e9ab72243049feb8dee14228b47fn;
+const P192_B = 0x64210519e59c80e70fa7e9ab72243049feb8deecc146b9b1n;
 const P192_GX = 0x188da80eb03090f67cbf20eb43a18800f4ff0afd82ff1012n;
 const P192_GY = 0x07192b95ffc8da78631011ed6b24cdd573f977a11e794811n;
 const P192_N = 0xfffffffffffffffffffffffe5bfe3300e84a7f471c8483d1n;
